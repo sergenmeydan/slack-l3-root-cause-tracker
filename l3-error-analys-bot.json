@@ -1,0 +1,196 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "trigger": [
+          "message"
+        ],
+        "channelId": {
+          "__rl": true,
+          "value": "Slack üzerindeki channelId'nizi giriniz.",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "25565845-a65b-434e-a432-afa00039feb2",
+      "name": "Slack Trigger",
+      "webhookId": "WEBHOOK_URL/ID",
+      "credentials": {
+        "slackApi": {
+          "id": "KENDI_CREDENTIAL_ID_NIZ",
+          "name": "KENDI_SLACK_HESABINIZ."
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "pythonNative",
+        "pythonCode": "# Veriyi güvenli çek\ninput_data = _item\nraw_text = \"\"\n\n# Veriyi farklı n8n sürümlerine göre arıyoruz\nif 'text' in input_data:\n    raw_text = input_data['text']\nelif 'json' in input_data and 'text' in input_data['json']:\n    raw_text = input_data['json']['text']\n\n# Metni temizleme\nclean_text = str(raw_text).strip()\nlower_text = clean_text.lower()\n\n# --- KESİN BOT KİLİDİ ---\n# Eğer mesaj bir bot tarafından atılmışsa VEYA bizim rapor başlığımızı içeriyorsa DUR\nif input_data.get('bot_id') or \"l3 teknik analiz raporu\" in lower_text:\n    # n8n'de bu adımın durması için boş dönüyoruz\n    return None \n\n# Varsayılan değerler\nstructured_data = {\n    \"system_name\": \"Tespit Edilemedi\",\n    \"log_error\": clean_text if clean_text else \"Mesaj okunamadı\",\n    \"root_cause\": \"Analiz Ediliyor\",\n    \"action_plan\": \"🔍 Detaylı log incelemesi başlatılmalı.\"\n}\n\n# --- AKILLI ANALİZ VE AKSİYON MANTIĞI ---\n\n# 1. Veritabanı ve Bağlantı Hataları\nif any(x in lower_text for x in [\"database\", \"db\", \"connection\", \"bağlantı\", \"sql\"]):\n    structured_data[\"root_cause\"] = \"Veritabanı Erişim Sorunu\"\n    structured_data[\"action_plan\"] = \"🗄️ Veritabanı pool kapasitesini ve sunucu CPU yükünü kontrol edin.\"\n\n# 2. Zaman Aşımı ve Servis Yanıt Hataları\nelif any(x in lower_text for x in [\"timeout\", \"zaman aşımı\", \"yanıt vermiyor\", \"slow\", \"yavaş\"]):\n    structured_data[\"root_cause\"] = \"Servis Performans Sorunu\"\n    structured_data[\"action_plan\"] = \"⚡ Mikroservisi restart etmeyi ve ağ gecikmesini kontrol etmeyi deneyin.\"\n\n# 3. Yetki ve Erişim Hataları\nelif any(x in lower_text for x in [\"yetki\", \"auth\", \"permission\", \"403\", \"login\"]):\n    structured_data[\"root_cause\"] = \"Erişim ve Yetki Sorunu\"\n    structured_data[\"action_plan\"] = \"🔑 API Token geçerliliğini ve kullanıcı rollerini kontrol edin.\"\n\n# 4. Sistem Belirleme (Ekibinin kullandığı sistemleri buraya ekle)\nsystems = [\"erp\", \"crm\", \"ödeme\", \"sepet\", \"mobil\", \"web\"]\nfor s in systems:\n    if s in lower_text:\n        structured_data[\"system_name\"] = s.upper()\n\nreturn structured_data"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        0
+      ],
+      "id": "ebd378aa-2915-4453-a9bc-bc47b95d7bdf",
+      "name": "Code in Python"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "YENI_KANAL_ID_BURAYA",
+          "mode": "id"
+        },
+        "text": "=🤖 L3 Teknik Analiz Raporu 🏢 Tahmin Edilen Sistem: {{ $json.system_name }} 💡 Kök Neden: {{ $json.root_cause }} ✅ Önerilen Aksiyon: {{ $json.action_plan }} 📝 Gelen Mesaj: {{ $json.log_error }}",
+        "otherOptions": {
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $('Slack Trigger').item.json.ts }}"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        640,
+        0
+      ],
+      "id": "904dc9e8-de30-48a2-b86b-a5f758eb8b53",
+      "name": "Send a message",
+      "webhookId": "WEBHOOK_URL/ID",
+      "credentials": {
+        "slackApi": {
+          "id": "Slack api id'nizi giriniz.",
+          "name": "Slack hesabınız."
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2d78590b-8bb8-43a2-a135-c361e2fc57dd",
+              "leftValue": "={{ $('Slack Trigger').item.json.text }}",
+              "rightValue": "hata",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "12ef9139-5baf-4af0-8d60-d70f0ae9a144",
+              "leftValue": "={{ $('Slack Trigger').item.json.text }}",
+              "rightValue": "problem",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "feb01291-b48c-4b1e-a0a2-4f71f41416fe",
+              "leftValue": "={{ $('Slack Trigger').item.json.text }}",
+              "rightValue": "yavaş",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "8af0f85a-68be-49ae-8648-92a9b1fdd2cd",
+              "leftValue": "={{ $('Slack Trigger').item.json.text }}",
+              "rightValue": "bug",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "c1c446ad-5940-4240-bc3c-154a76e98f87",
+      "name": "Filter"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Slack Trigger": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in Python": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        []
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Code in Python",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "***",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "Kendi id'nizi giriniz."
+  },
+  "id": "***",
+  "tags": []
+}
